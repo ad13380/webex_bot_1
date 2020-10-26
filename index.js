@@ -148,47 +148,57 @@ framework.hears("say hi to everyone", function (bot) {
     });
 });
 
-// Buttons & Cards data
-let cardJSON = {
-  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+let newCardJSON = {
   type: "AdaptiveCard",
-  version: "1.0",
   body: [
     {
       type: "ColumnSet",
       columns: [
         {
           type: "Column",
-          width: "5",
+          width: "stretch",
           items: [
             {
-              type: "Image",
-              url: "Your avatar appears here!",
-              size: "large",
-              horizontalAlignment: "Center",
-              style: "person",
+              type: "ActionSet",
+              separator: true,
+              actions: [
+                {
+                  type: "Action.Submit",
+                  title: "🔥",
+                  data: {
+                    feeling: "fire",
+                  },
+                },
+              ],
             },
+          ],
+        },
+        {
+          type: "Column",
+          width: "stretch",
+          items: [
             {
-              type: "TextBlock",
-              text: "Your name will be here!",
-              size: "medium",
-              horizontalAlignment: "Center",
-              weight: "Bolder",
-            },
-            {
-              type: "TextBlock",
-              text: "And your email goes here!",
-              size: "small",
-              horizontalAlignment: "Center",
-              isSubtle: true,
-              wrap: false,
+              type: "ActionSet",
+              actions: [
+                {
+                  type: "Action.Submit",
+                  title: "😒",
+                  data: {
+                    feeling: "bad",
+                  },
+                },
+              ],
             },
           ],
         },
       ],
     },
   ],
+  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+  version: "1.2",
 };
+
+// Buttons & Cards data
 
 /* On mention with card example
 ex User enters @botname 'card me' phrase, the bot will produce a personalized card - https://developer.webex.com/docs/api/guides/cards
@@ -237,7 +247,7 @@ var interval;
 var status = "";
 var isInSession = false;
 var isPaused = false;
-var timeRemaining = null;
+var timeRemaining = 0;
 
 function updateTimer(newStatus) {
   status = newStatus;
@@ -277,6 +287,15 @@ const startTimer = (bot) => {
   }, 5000);
 };
 
+const inSessionReminder = (bot) => {
+  bot
+    .say(
+      "markdown",
+      "You need to start a Pomodoro session first, use the **work** command to start your first work session"
+    )
+    .catch((e) => console.error(`bot.say failed: ${e.message}`));
+};
+
 framework.hears("work", function (bot, trigger) {
   responded = true;
 
@@ -298,31 +317,106 @@ framework.hears("work", function (bot, trigger) {
 
 framework.hears("short break", function (bot, trigger) {
   responded = true;
+
+  if (!isInSession) return inSessionReminder(bot);
+
+  // make this one say statement
   if (status === "shortBreak")
     return bot
       .say("You are already in a short break")
       .catch((e) => console.error(`bot.say failed: ${e.message}`));
+
   updateTimer("shortBreak");
   bot.say(`${trigger.person.displayName} started a short 5 minute break`);
 });
 
 framework.hears("pause", function (bot, trigger) {
   responded = true;
+
+  if (!isInSession) return inSessionReminder(bot);
+
   isPaused = true;
+  // need an if statement
   bot.say(`${trigger.person.displayName} paused the session`);
 });
 
 framework.hears("resume", function (bot, trigger) {
   responded = true;
+
+  if (!isInSession) return inSessionReminder(bot);
+
   isPaused = false;
+  // need an if statement
   bot.say(`${trigger.person.displayName} resumed the session`);
 });
 
 framework.hears("finish", function (bot, trigger) {
   responded = true;
+
+  if (!isInSession) return inSessionReminder(bot);
+
   clearInterval(interval);
   isInSession = false;
   updateTimer("");
+});
+
+app.post("/", webhook(framework));
+
+// Process a submitted card
+framework.on("attachmentAction", function (bot, trigger) {
+  bot.say(
+    `Got an attachmentAction:\n${JSON.stringify(
+      trigger.attachmentAction.inputs.feeling,
+      null,
+      2
+    )}`
+  );
+});
+
+let cardJSON = {
+  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+  type: "AdaptiveCard",
+  version: "1.0",
+  body: [
+    {
+      type: "ColumnSet",
+      columns: [
+        {
+          type: "Column",
+          width: "5",
+          items: [
+            {
+              type: "Image",
+              url: "Your avatar appears here!",
+              size: "large",
+              horizontalAlignment: "Center",
+              style: "person",
+            },
+            {
+              type: "TextBlock",
+              text: "Your name will be here!",
+              size: "medium",
+              horizontalAlignment: "Center",
+              weight: "Bolder",
+            },
+            {
+              type: "TextBlock",
+              text: "And your email goes here!",
+              size: "small",
+              horizontalAlignment: "Center",
+              isSubtle: true,
+              wrap: false,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+framework.hears("card again", function (bot, trigger) {
+  responded = true;
+  bot.sendCard(newCardJSON);
 });
 
 // =======
@@ -366,8 +460,6 @@ function sendHelp(bot) {
 app.get("/", function (req, res, bot) {
   res.send(`I'm alive.`);
 });
-
-app.post("/", webhook(framework));
 
 var server = app.listen(config.port, function () {
   framework.debug("framework listening on port %s", config.port);

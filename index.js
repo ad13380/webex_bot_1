@@ -1,5 +1,3 @@
-//Webex Bot Starter - featuring the webex-node-bot-framework - https://www.npmjs.com/package/webex-node-bot-framework
-
 var framework = require("webex-node-bot-framework");
 var webhook = require("webex-node-bot-framework/webhook");
 var express = require("express");
@@ -18,13 +16,8 @@ framework.on("initialized", function () {
   console.log("framework is all fired up! [Press CTRL-C to quit]");
 });
 
-// A spawn event is generated when the framework finds a space with your bot in it
-// If actorId is set, it means that user has just added your bot to a new space
-// If not, the framework has discovered your bot in an existing space
 framework.on("spawn", (bot, id, actorId) => {
   if (!actorId) {
-    // don't say anything here or your bot's spaces will get
-    // spammed every time your server is restarted
     console.log(
       `While starting up, the framework found our bot in a space called: ${bot.room.title}`
     );
@@ -73,79 +66,6 @@ framework.hears(/help|what can i (do|say)|what (can|do) you do/i, function (
     .say(`Hello ${trigger.person.displayName}.`)
     .then(() => sendHelp(bot))
     .catch((e) => console.error(`Problem in help hander: ${e.message}`));
-});
-
-/* On mention with command
-ex User enters @botname framework, the bot will write back in markdown
-*/
-framework.hears("framework", function (bot) {
-  console.log("framework command received");
-  responded = true;
-  bot.say(
-    "markdown",
-    "The primary purpose for the [webex-node-bot-framework](https://github.com/jpjpjp/webex-node-bot-framework) was to create a framework based on the [webex-jssdk](https://webex.github.io/webex-js-sdk) which continues to be supported as new features and functionality are added to Webex. This version of the proejct was designed with two themes in mind: \n\n\n * Mimimize Webex API Calls. The original flint could be quite slow as it attempted to provide bot developers rich details about the space, membership, message and message author. This version eliminates some of that data in the interests of efficiency, (but provides convenience methods to enable bot developers to get this information if it is required)\n * Leverage native Webex data types. The original flint would copy details from the webex objects such as message and person into various flint objects. This version simply attaches the native Webex objects. This increases the framework's efficiency and makes it future proof as new attributes are added to the various webex DTOs "
-  );
-});
-
-/* On mention with command, using other trigger data, can use lite markdown formatting
-ex User enters @botname 'info' phrase, the bot will provide personal details
-*/
-framework.hears("info", function (bot, trigger) {
-  console.log("info command received");
-  responded = true;
-  //the "trigger" parameter gives you access to data about the user who entered the command
-  let personAvatar = trigger.person.avatar;
-  let personEmail = trigger.person.emails[0];
-  let personDisplayName = trigger.person.displayName;
-  let outputString = `Here is your personal information: \n\n\n **Name:** ${personDisplayName}  \n\n\n **Email:** ${personEmail} \n\n\n **Avatar URL:** ${personAvatar}`;
-  bot.say("markdown", outputString);
-});
-
-/* On mention with bot data 
-ex User enters @botname 'space' phrase, the bot will provide details about that particular space
-*/
-framework.hears("space", function (bot) {
-  console.log("space. the final frontier");
-  responded = true;
-  let roomTitle = bot.room.title;
-  let spaceID = bot.room.id;
-  let roomType = bot.room.type;
-
-  let outputString = `The title of this space: ${roomTitle} \n\n The roomID of this space: ${spaceID} \n\n The type of this space: ${roomType}`;
-
-  console.log(outputString);
-  bot
-    .say("markdown", outputString)
-    .catch((e) => console.error(`bot.say failed: ${e.message}`));
-});
-
-/* 
-   Say hi to every member in the space
-   This demonstrates how developers can access the webex
-   sdk to call any Webex API.  API Doc: https://webex.github.io/webex-js-sdk/api/
-*/
-framework.hears("say hi to everyone", function (bot) {
-  console.log("say hi to everyone.  Its a party");
-  responded = true;
-  // Use the webex SDK to get the list of users in this space
-  bot.webex.memberships
-    .list({ roomId: bot.room.id })
-    .then((memberships) => {
-      for (const member of memberships.items) {
-        if (member.personId === bot.person.id) {
-          // Skip myself!
-          continue;
-        }
-        let displayName = member.personDisplayName
-          ? member.personDisplayName
-          : member.personEmail;
-        bot.say(`Hello ${displayName}`);
-      }
-    })
-    .catch((e) => {
-      console.error(`Call to sdk.memberships.get() failed: ${e.messages}`);
-      bot.say("Hello everybody!");
-    });
 });
 
 let newCardJSON = {
@@ -243,121 +163,167 @@ framework.hears("reply", function (bot, trigger) {
 // Test
 // =======
 
+// make this a state variable
 var interval;
 var status = "";
 var isInSession = false;
 var isPaused = false;
 var timeRemaining = 0;
+var secondsWorked = 0;
+var breakCounter = 0;
+const SHORT_BREAK_MSG = "a short 5 minute break ☕️";
+const LONG_BREAK_MSG = "a longer 20 minute break 🏖️";
+const WORK_MSG = "a 25 miniute working session 📚";
+const WORKING_TIME_LIMIT = 25000;
+const SHORT_BREAK_TIME_LIMIT = 5000;
 
-function updateTimer(newStatus) {
-  status = newStatus;
-  isPaused = false;
-  switch (newStatus) {
-    case "shortBreak":
-      timeRemaining = 5000;
-      break;
-    case "work":
-      timeRemaining = 25000;
-      break;
-    default:
-      timeRemaining = 0;
-      break;
+const isLongBreak = () => {
+  if (++breakCounter > 3) {
+    breakCounter = 0;
+    return true;
   }
-}
 
-const startTimer = (bot) => {
-  // start loop
-  isInSession = true;
-  interval = setInterval(() => {
-    console.log(status);
-
-    // tick
-    if (!isPaused) timeRemaining -= 5000;
-
-    // increment session
-    if (timeRemaining === 0) {
-      if (status === "work") {
-        updateTimer("shortBreak");
-        bot.say("short 5 minute break");
-      } else if (status === "shortBreak") {
-        updateTimer("work");
-        bot.say("25 minute working session");
-      }
-    }
-  }, 5000);
+  return false;
 };
 
-const inSessionReminder = (bot) => {
+const updateSession = (bot, newSession, trigger = null) => {
+  let sessionMsg;
+  if (newSession === "workSession") {
+    status = "work";
+    timeRemaining = WORKING_TIME_LIMIT;
+    sessionMsg = WORK_MSG;
+  } else if (newSession === "breakSession") {
+    status = "shortBreak";
+    timeRemaining = SHORT_BREAK_TIME_LIMIT;
+    sessionMsg = SHORT_BREAK_MSG;
+  }
+
+  sessionMsg = trigger
+    ? `${trigger.person.displayName} started ${sessionMsg}`
+    : `Time for ${sessionMsg}`;
+
   bot
-    .say(
-      "markdown",
-      "You need to start a Pomodoro session first, use the **work** command to start your first work session"
-    )
+    .say("markdown", sessionMsg)
     .catch((e) => console.error(`bot.say failed: ${e.message}`));
 };
 
+const startSession = (bot) => {
+  isInSession = true;
+  interval = setInterval(() => {
+    console.log(status, timeRemaining);
+
+    if (!isPaused) {
+      timeRemaining -= 1000;
+      if (status === "work") secondsWorked++;
+    }
+
+    if (timeRemaining === 0) {
+      if (status === "work") {
+        updateSession(bot, "breakSession");
+      } else if (status === "shortBreak") {
+        updateSession(bot, "workSession");
+      }
+    }
+  }, 1000);
+};
+
+const commandReminder = (bot, trigger, reminder) => {
+  let reminderMsg;
+  switch (reminder) {
+    case "workReminder":
+      reminderMsg =
+        "You are already in a work session, use the **break** command to start the next break session";
+      break;
+    case "breakReminder":
+      reminderMsg =
+        "You are already in a break, use the **work** command to start the next work session";
+      break;
+    case "pauseReminder":
+      reminderMsg =
+        "You need to resume the session first, use the **resume** command to resume the current session";
+      break;
+    case "resumeReminder":
+      reminderMsg =
+        "You are already in a live session, use the **pause** command to pause the current session";
+      break;
+    case "notInSessionReminder":
+      reminderMsg =
+        "You need to start a Pomodoro session first, use the **work** command to start your first work session";
+      break;
+  }
+  bot
+    .reply(trigger.message, reminderMsg, "markdown")
+    .catch((e) => console.error(`bot.say failed: ${e.message}`));
+};
+
+// WORK
 framework.hears("work", function (bot, trigger) {
   responded = true;
 
-  // start timer
-  if (!isInSession) startTimer(bot);
+  if (!isInSession) startSession(bot);
+  if (isPaused) return commandReminder(bot, trigger, "pauseReminder");
+  if (status === "work") return commandReminder(bot, trigger, "workReminder");
 
-  // already working
-  if (status === "work")
-    return bot
-      .say("You are already in a working session")
-      .catch((e) => console.error(`bot.say failed: ${e.message}`));
-
-  // start working
-  updateTimer("work");
-
-  // confirmation message
-  bot.say(`${trigger.person.displayName} started a 25 minute working session`);
+  updateSession(bot, "workSession", trigger);
 });
 
-framework.hears("short break", function (bot, trigger) {
+// SHORT BREAK
+framework.hears("break", function (bot, trigger) {
   responded = true;
 
-  if (!isInSession) return inSessionReminder(bot);
+  if (!isInSession)
+    return commandReminder(bot, trigger, "notInSessionReminder");
+  if (isPaused) return commandReminder(bot, trigger, "pauseReminder");
+  if (status === "shortBreak" || status === "longBreak")
+    return commandReminder(bot, trigger, "breakReminder");
 
-  // make this one say statement
-  if (status === "shortBreak")
-    return bot
-      .say("You are already in a short break")
-      .catch((e) => console.error(`bot.say failed: ${e.message}`));
-
-  updateTimer("shortBreak");
-  bot.say(`${trigger.person.displayName} started a short 5 minute break`);
+  updateSession(bot, "breakSession", trigger);
 });
 
+// PAUSE
 framework.hears("pause", function (bot, trigger) {
   responded = true;
 
-  if (!isInSession) return inSessionReminder(bot);
+  if (!isInSession)
+    return commandReminder(bot, trigger, "notInSessionReminder");
+  if (isPaused) return commandReminder(bot, trigger, "pauseReminder");
 
   isPaused = true;
-  // need an if statement
-  bot.say(`${trigger.person.displayName} paused the session`);
+  bot.say(`${trigger.person.displayName} paused the session ⏸️`);
 });
 
+// RESUME
 framework.hears("resume", function (bot, trigger) {
   responded = true;
+  console.log("resume");
 
-  if (!isInSession) return inSessionReminder(bot);
+  if (!isInSession)
+    return commandReminder(bot, trigger, "notInSessionReminder");
+  if (!isPaused) return commandReminder(bot, trigger, "resumeReminder");
 
   isPaused = false;
-  // need an if statement
-  bot.say(`${trigger.person.displayName} resumed the session`);
+  bot.say(`${trigger.person.displayName} resumed the session ▶️`);
 });
 
+// FINISH
 framework.hears("finish", function (bot, trigger) {
   responded = true;
 
-  if (!isInSession) return inSessionReminder(bot);
+  if (!isInSession)
+    return commandReminder(bot, trigger, "notInSessionReminder");
 
+  // make a set to initial state function
   clearInterval(interval);
   isInSession = false;
-  updateTimer("");
+  isPaused = false;
+  status = "";
+  minutesWorked = 0;
+  timeRemaining = 0;
+
+  // need an if statement
+  bot.say(
+    `${trigger.person.displayName} ended the session, worked ${secondsWorked} seconds`
+  );
 });
 
 app.post("/", webhook(framework));
@@ -415,6 +381,7 @@ let cardJSON = {
 };
 
 framework.hears("card again", function (bot, trigger) {
+  console.log("hello");
   responded = true;
   bot.sendCard(newCardJSON);
 });

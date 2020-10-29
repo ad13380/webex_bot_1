@@ -170,11 +170,11 @@ const isLongBreak = () => {
   return false;
 };
 
-const formatSessionChangeMsg = (sessionMsg, trigger) => {
+function formatSessionChangeMsg(sessionMsg, trigger) {
   return trigger
     ? `${trigger.person.displayName} started ${sessionMsg}`
     : `Time for ${sessionMsg}`;
-};
+}
 
 const formatTime = (seconds) => {
   let timeFormatArray = [];

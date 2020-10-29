@@ -162,6 +162,7 @@ const SHORT_BREAK_TIME_LIMIT = 5000;
 const LONG_BREAK_TIME_LIMIT = 20000;
 
 const isLongBreak = () => {
+  // magic number
   if (++state.breakCounter > 3) {
     state.breakCounter = 0;
     return true;

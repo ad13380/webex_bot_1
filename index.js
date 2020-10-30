@@ -3,7 +3,8 @@ var webhook = require("webex-node-bot-framework/webhook");
 var express = require("express");
 var bodyParser = require("body-parser");
 var app = express();
-const reminderObject = require("./helperFunctions/reminderObject");
+// imports
+const { Pomodoro } = require("./models/Pomodoro");
 
 app.use(bodyParser.json());
 app.use(express.static("images"));
@@ -143,169 +144,211 @@ framework.hears("card me", function (bot, trigger) {
 // Test
 // =======
 
+// let state = {
+//   status: "",
+//   isInSession: false,
+//   isPaused: false,
+//   secondsRemaining: 0,
+//   secondsWorked: 0,
+//   breakCounter: 0,
+// };
+// // constants
+// const SHORT_BREAK_MSG = "a short 5 minute break ☕️";
+// const LONG_BREAK_MSG = "a longer 20 minute break 🏖️";
+// const WORK_MSG = "a 25 miniute working session 📚";
+// const WORKING_TIME_LIMIT = 3 * 60000;
+// const SHORT_BREAK_TIME_LIMIT = 5000;
+// const LONG_BREAK_TIME_LIMIT = 20000;
+
+// const isLongBreak = () => {
+//   // magic number
+//   if (++state.breakCounter > 3) {
+//     state.breakCounter = 0;
+//     return true;
+//   }
+//   return false;
+// };
+
+// const formatSessionChangeMsg = (sessionMsg, trigger) => {
+//   return trigger
+//     ? `${trigger.person.displayName} started ${sessionMsg}`
+//     : `Time for ${sessionMsg}`;
+// };
+
+// const formatTime = (seconds) => {
+//   let timeFormatArray = [];
+//   const hours = Math.floor(seconds / 3600000);
+//   const minutes = Math.floor((seconds - hours * 3600000) / 60000);
+
+//   if (hours > 0) {
+//     timeFormatArray.push(hours > 1 ? `${hours} hours` : "1 hour");
+//   }
+//   if (minutes >= 1) {
+//     timeFormatArray.push(minutes > 1 ? `${minutes} minutes` : "1 minute");
+//   } else if (hours === 0) {
+//     timeFormatArray.push("less than a minute");
+//   }
+
+//   return timeFormatArray.join(" and ");
+// };
+
+// const formatSession = () => {
+//   if (state.status === "longBreak" || state.status === "shortBreak") {
+//     return "break";
+//   }
+//   if (state.status === "work") return "work";
+// };
+
+// const sendReminder = (bot, trigger, reminder) => {
+//   bot
+//     .reply(trigger.message, reminderObject[reminder], "markdown")
+//     .catch((e) => console.error(`bot.say failed: ${e.message}`));
+// };
+
+// const sendStatus = (bot) => {
+//   bot.say(
+//     `We are in a ${
+//       state.isPaused ? "paused " : ""
+//     }${formatSession()} session with ${formatTime(state.secondsRemaining)} left`
+//   );
+// };
+
+// const updateSession = (bot, newSession, trigger = null) => {
+//   let sessionMsg;
+
+//   if (newSession === "workSession") {
+//     state.status = "work";
+//     state.secondsRemaining = WORKING_TIME_LIMIT;
+//     sessionMsg = WORK_MSG;
+//   } else if (newSession === "breakSession") {
+//     if (isLongBreak()) {
+//       state.status = "longBreak";
+//       state.secondsRemaining = LONG_BREAK_TIME_LIMIT;
+//       sessionMsg = LONG_BREAK_MSG;
+//     } else {
+//       state.status = "shortBreak";
+//       state.secondsRemaining = SHORT_BREAK_TIME_LIMIT;
+//       sessionMsg = SHORT_BREAK_MSG;
+//     }
+//   }
+
+//   formatSessionMsg = formatSessionChangeMsg(sessionMsg, trigger);
+//   bot
+//     .say("markdown", formatSessionMsg)
+//     .catch((e) => console.error(`bot.say failed: ${e.message}`));
+// };
+
 var interval;
+const TIME_INTERVAL = 1000;
+const pom = new Pomodoro();
 
-let state = {
-  status: "",
-  isInSession: false,
-  isPaused: false,
-  secondsRemaining: 0,
-  secondsWorked: 0,
-  breakCounter: 0,
-};
-// constants
-const SHORT_BREAK_MSG = "a short 5 minute break ☕️";
-const LONG_BREAK_MSG = "a longer 20 minute break 🏖️";
-const WORK_MSG = "a 25 miniute working session 📚";
-const WORKING_TIME_LIMIT = 3 * 60000;
-const SHORT_BREAK_TIME_LIMIT = 5000;
-const LONG_BREAK_TIME_LIMIT = 20000;
-
-const isLongBreak = () => {
-  // magic number
-  if (++state.breakCounter > 3) {
-    state.breakCounter = 0;
-    return true;
-  }
-  return false;
-};
-
-const formatSessionChangeMsg = (sessionMsg, trigger) => {
-  return trigger
-    ? `${trigger.person.displayName} started ${sessionMsg}`
-    : `Time for ${sessionMsg}`;
-};
-
-const formatTime = (seconds) => {
-  let timeFormatArray = [];
-  const hours = Math.floor(seconds / 3600000);
-  const minutes = Math.floor((seconds - hours * 3600000) / 60000);
-
-  if (hours > 0) {
-    timeFormatArray.push(hours > 1 ? `${hours} hours` : "1 hour");
-  }
-  if (minutes >= 1) {
-    timeFormatArray.push(minutes > 1 ? `${minutes} minutes` : "1 minute");
-  } else if (hours === 0) {
-    timeFormatArray.push("less than a minute");
-  }
-
-  return timeFormatArray.join(" and ");
-};
-
-const formatSession = () => {
-  if (state.status === "longBreak" || state.status === "shortBreak") {
-    return "break";
-  }
-  if (state.status === "work") return "work";
-};
-
-const sendReminder = (bot, trigger, reminder) => {
-  bot
-    .reply(trigger.message, reminderObject[reminder], "markdown")
-    .catch((e) => console.error(`bot.say failed: ${e.message}`));
-};
-
-const sendStatus = (bot) => {
-  bot.say(
-    `We are in a ${
-      state.isPaused ? "paused " : ""
-    }${formatSession()} session with ${formatTime(state.secondsRemaining)} left`
-  );
-};
-
-const startSession = (bot) => {
-  state.isInSession = true;
+function startSession(bot) {
+  pom.isInSession = true;
   interval = setInterval(() => {
-    console.log(state.status, Math.floor(state.secondsRemaining / 60000));
+    console.log(
+      pom.state.status,
+      Math.floor(pom.state.secondsRemaining / 60000)
+    );
 
-    if (!state.isPaused) {
-      state.secondsRemaining -= 1000;
-      if (state.status === "work") state.secondsWorked++;
+    if (!pom.state.isPaused) {
+      pom.updateTime(TIME_INTERVAL);
     }
 
-    if (state.secondsRemaining === 0) {
-      if (state.status === "work") {
-        updateSession(bot, "breakSession");
+    if (pom.state.secondsRemaining === 0) {
+      let updateMessage;
+      if (pom.state.status === "work") {
+        updateMessage = pom.getSessionUpdate("breakSession");
       } else if (
-        state.status === "shortBreak" ||
-        state.status === "longBreak"
+        pom.state.status === "shortBreak" ||
+        pom.state.status === "longBreak"
       ) {
-        updateSession(bot, "workSession");
+        updateMessage = pom.getSessionUpdate("workSession");
       }
+      bot
+        .say("markdown", updateMessage)
+        .catch((e) => console.error(`bot.say failed: ${e.message}`));
     }
-  }, 1000);
-};
-
-const updateSession = (bot, newSession, trigger = null) => {
-  let sessionMsg;
-
-  if (newSession === "workSession") {
-    state.status = "work";
-    state.secondsRemaining = WORKING_TIME_LIMIT;
-    sessionMsg = WORK_MSG;
-  } else if (newSession === "breakSession") {
-    if (isLongBreak()) {
-      state.status = "longBreak";
-      state.secondsRemaining = LONG_BREAK_TIME_LIMIT;
-      sessionMsg = LONG_BREAK_MSG;
-    } else {
-      state.status = "shortBreak";
-      state.secondsRemaining = SHORT_BREAK_TIME_LIMIT;
-      sessionMsg = SHORT_BREAK_MSG;
-    }
-  }
-
-  formatSessionMsg = formatSessionChangeMsg(sessionMsg, trigger);
-  bot
-    .say("markdown", formatSessionMsg)
-    .catch((e) => console.error(`bot.say failed: ${e.message}`));
-};
+  }, TIME_INTERVAL);
+}
 
 // WORK
 framework.hears("work", function (bot, trigger) {
   responded = true;
 
-  if (!state.isInSession) startSession(bot);
-  if (state.isPaused) return sendReminder(bot, trigger, "pauseReminder");
-  if (state.status === "work")
-    return sendReminder(bot, trigger, "workReminder");
+  if (!pom.isInSession) startSession(bot);
 
-  updateSession(bot, "workSession", trigger);
+  let reminderMessage;
+  if (pom.state.isPaused) reminderMessage = pom.getReminder("pauseReminder");
+  else if (pom.state.status === "work")
+    reminderMessage = pom.getReminder("workReminder");
+  if (reminderMessage)
+    return bot
+      .reply(trigger.message, reminderMessage, "markdown")
+      .catch((e) => console.error(`bot.say failed: ${e.message}`));
+
+  let updateMessage = pom.getSessionUpdate("workSession", trigger);
+  bot
+    .say("markdown", updateMessage)
+    .catch((e) => console.error(`bot.say failed: ${e.message}`));
 });
 
-// SHORT BREAK
+// BREAK
 framework.hears("break", function (bot, trigger) {
   responded = true;
 
-  if (!state.isInSession)
-    return sendReminder(bot, trigger, "notInSessionReminder");
-  if (state.isPaused) return sendReminder(bot, trigger, "pauseReminder");
-  if (state.status === "shortBreak" || state.status === "longBreak")
-    return sendReminder(bot, trigger, "breakReminder");
+  let reminderMessage;
+  if (!pom.isInSession)
+    reminderMessage = pom.getReminder("notInSessionReminder");
+  else if (pom.state.isPaused)
+    reminderMessage = pom.getReminder("pauseReminder");
+  else if (
+    pom.state.status === "shortBreak" ||
+    pom.state.status === "longBreak"
+  )
+    reminderMessage = pom.getReminder("breakReminder");
+  if (reminderMessage)
+    return bot
+      .reply(trigger.message, reminderMessage, "markdown")
+      .catch((e) => console.error(`bot.say failed: ${e.message}`));
 
-  updateSession(bot, "breakSession", trigger);
+  let updateMessage = pom.getSessionUpdate("breakSession", trigger);
+  bot
+    .say("markdown", updateMessage)
+    .catch((e) => console.error(`bot.say failed: ${e.message}`));
 });
 
 // STATUS
 framework.hears("status", function (bot, trigger) {
   responded = true;
 
-  if (!state.isInSession)
-    return sendReminder(bot, trigger, "notInSessionReminder");
+  if (!pom.isInSession) {
+    let reminderMessage = pom.getReminder("notInSessionReminder");
+    return bot
+      .reply(trigger.message, reminderMessage, "markdown")
+      .catch((e) => console.error(`bot.say failed: ${e.message}`));
+  }
 
-  sendStatus(bot);
+  let statusMessage = pom.getStatusUpdate();
+  bot
+    .say("markdown", statusMessage)
+    .catch((e) => console.error(`bot.say failed: ${e.message}`));
 });
 
 // PAUSE
 framework.hears("pause", function (bot, trigger) {
   responded = true;
 
-  if (!state.isInSession)
-    return sendReminder(bot, trigger, "notInSessionReminder");
-  if (state.isPaused) return sendReminder(bot, trigger, "pauseReminder");
+  let reminderMessage;
+  if (!pom.isInSession)
+    reminderMessage = pom.getReminder("notInSessionReminder");
+  else if (pom.state.isPaused)
+    reminderMessage = pom.getReminder("pauseReminder");
+  if (reminderMessage)
+    return bot
+      .reply(trigger.message, reminderMessage, "markdown")
+      .catch((e) => console.error(`bot.say failed: ${e.message}`));
 
-  state.isPaused = true;
+  pom.state.isPaused = true;
   bot.say(`${trigger.person.displayName} paused the session ⏸️`);
 });
 
@@ -313,14 +356,25 @@ framework.hears("pause", function (bot, trigger) {
 framework.hears("resume", function (bot, trigger) {
   responded = true;
 
-  if (!state.isInSession)
-    return sendReminder(bot, trigger, "notInSessionReminder");
-  if (!state.isPaused) return sendReminder(bot, trigger, "resumeReminder");
+  let reminderMessage;
+  if (!pom.isInSession)
+    reminderMessage = pom.getReminder("notInSessionReminder");
+  else if (!pom.state.isPaused)
+    reminderMessage = pom.getReminder("resumeReminder");
+  if (reminderMessage)
+    return bot
+      .reply(trigger.message, reminderMessage, "markdown")
+      .catch((e) => console.error(`bot.say failed: ${e.message}`));
 
-  state.isPaused = false;
+  pom.state.isPaused = false;
   bot
     .say(`${trigger.person.displayName} resumed the session ▶️`)
-    .then(() => sendStatus(bot))
+    .then(() => {
+      let statusMessage = pom.getStatusUpdate();
+      bot
+        .say("markdown", statusMessage)
+        .catch((e) => console.error(`bot.say failed: ${e.message}`));
+    })
     .catch((e) => console.error(`bot.say failed: ${e.message}`));
 });
 
@@ -328,23 +382,22 @@ framework.hears("resume", function (bot, trigger) {
 framework.hears("finish", function (bot, trigger) {
   responded = true;
 
-  if (!state.isInSession)
-    return sendReminder(bot, trigger, "notInSessionReminder");
+  if (!pom.isInSession) {
+    let reminderMessage = pom.getReminder("notInSessionReminder");
+    return bot
+      .reply(trigger.message, reminderMessage, "markdown")
+      .catch((e) => console.error(`bot.say failed: ${e.message}`));
+  }
 
-  // make a set to initial state function
   clearInterval(interval);
-  state.isInSession = false;
-  state.isPaused = false;
-  state.status = "";
-  minutesWorked = 0;
-  state.secondsRemaining = 0;
-
-  // need an if statement
-  bot.say(`${trigger.person.displayName} ended the session`).then(() => {
-    bot.say(
-      `We worked for ${formatTime(state.secondsWorked)} in this session 💪`
-    );
-  });
+  bot
+    .say(`${trigger.person.displayName} ended the session`)
+    .then(() => {
+      let finishMessage = pom.getFinishMessage();
+      bot.say(finishMessage);
+    })
+    .catch((e) => console.error(`bot.say failed: ${e.message}`));
+  pom.reset();
 });
 
 app.post("/", webhook(framework));

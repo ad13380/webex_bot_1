@@ -139,7 +139,7 @@ const checkInCardJSON = {
                   type: "Action.Submit",
                   title: "☔️",
                   data: {
-                    feeling: "bad",
+                    feeling: "not so great",
                   },
                 },
               ],

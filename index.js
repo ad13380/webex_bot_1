@@ -2,10 +2,12 @@ var framework = require("webex-node-bot-framework");
 var webhook = require("webex-node-bot-framework/webhook");
 var express = require("express");
 var bodyParser = require("body-parser");
+const fetch = require("node-fetch");
 var app = express();
 // imports
 const { Pomodoro } = require("./models/Pomodoro");
-
+const { CheckIn } = require("./models/CheckIn");
+const { checkInCardJSON } = require("./templates/checkInCardJSON");
 app.use(bodyParser.json());
 app.use(express.static("images"));
 const config = require("./config.json");
@@ -21,9 +23,9 @@ framework.on("initialized", function () {
 
 framework.on("spawn", (bot, id, actorId) => {
   if (!actorId) {
-    console.log(
-      `While starting up, the framework found our bot in a space called: ${bot.room.title}`
-    );
+    // console.log(
+    //   `While starting up, the framework found our bot in a space called: ${bot.room.title}`
+    // );
   } else {
     // When actorId is present it means someone added your bot got added to a new space
     // Lets find out more about them..
@@ -69,56 +71,6 @@ framework.hears(/help|what can i (do|say)|what (can|do) you do/i, function (
     .catch((e) => console.error(`Problem in help hander: ${e.message}`));
 });
 
-let newCardJSON = {
-  type: "AdaptiveCard",
-  body: [
-    {
-      type: "ColumnSet",
-      columns: [
-        {
-          type: "Column",
-          width: "stretch",
-          items: [
-            {
-              type: "ActionSet",
-              separator: true,
-              actions: [
-                {
-                  type: "Action.Submit",
-                  title: "🔥",
-                  data: {
-                    feeling: "fire",
-                  },
-                },
-              ],
-            },
-          ],
-        },
-        {
-          type: "Column",
-          width: "stretch",
-          items: [
-            {
-              type: "ActionSet",
-              actions: [
-                {
-                  type: "Action.Submit",
-                  title: "😒",
-                  data: {
-                    feeling: "bad",
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ],
-  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-  version: "1.2",
-};
-
 // Buttons & Cards data
 
 /* On mention with card example
@@ -147,6 +99,7 @@ framework.hears("card me", function (bot, trigger) {
 var interval;
 const TIME_INTERVAL = 1000;
 const pom = new Pomodoro();
+const check = new CheckIn(checkInCardJSON);
 
 function startSession(bot) {
   pom.isInSession = true;
@@ -306,18 +259,35 @@ framework.hears("finish", function (bot, trigger) {
   pom.reset();
 });
 
-app.post("/", webhook(framework));
-
-// Process a submitted card
-framework.on("attachmentAction", function (bot, trigger) {
-  bot.say(
-    `Got an attachmentAction:\n${JSON.stringify(
-      trigger.attachmentAction.inputs.feeling,
-      null,
-      2
-    )}`
-  );
+// Temporary - remove later
+framework.hears("check in", function (bot, trigger) {
+  responded = true;
+  bot.sendCard(check.getCard());
 });
+
+framework.on("attachmentAction", function (bot, trigger) {
+  getDisplayName(trigger.attachmentAction.personId).then((displayName) => {
+    let response = {
+      name: displayName,
+      feeling: trigger.attachmentAction.inputs.feeling,
+    };
+    check.addRecord(response);
+  });
+});
+
+async function getDisplayName(personId) {
+  const url = `https://webexapis.com/v1/people/${personId}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+  const responseJson = await response.json();
+  return responseJson.displayName;
+}
+
+app.post("/", webhook(framework));
 
 let cardJSON = {
   $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -359,12 +329,6 @@ let cardJSON = {
     },
   ],
 };
-
-framework.hears("card again", function (bot, trigger) {
-  console.log("hello");
-  responded = true;
-  bot.sendCard(newCardJSON);
-});
 
 // =======
 // Test

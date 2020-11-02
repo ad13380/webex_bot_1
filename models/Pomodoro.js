@@ -137,4 +137,4 @@ class Pomodoro {
   }
 }
 
-module.exports = { Pomodoro: Pomodoro };
+module.exports = { Pomodoro };

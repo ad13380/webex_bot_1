@@ -1,10 +1,10 @@
 {
-  "name": "Webex-Bot-Starter",
   "version": "1.0.0",
   "description": "Starter template for creating a Webex Teams bot",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js"
+    "start": "nodemon index.js",
+    "test": "jest --coverage"
   },
   "repository": {
     "type": "git",
@@ -15,7 +15,6 @@
     "Webex",
     "webex-bot-framework"
   ],
-  "author": "Phil Bellanti",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/tbd/webexbotstarter/issues"
@@ -28,5 +27,8 @@
     "node-fetch": "^2.6.1",
     "nodemon": "^2.0.6",
     "webex-node-bot-framework": "^1.0.5"
+  },
+  "devDependencies": {
+    "jest": "^26.6.2"
   }
 }

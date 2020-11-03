@@ -7,7 +7,7 @@ class CheckIn {
     this.teamCardSection = [
       {
         type: "TextBlock",
-        text: "How's your team?",
+        text: "How is your team doing?",
         size: "Large",
         color: "Dark",
         spacing: "Small",
@@ -20,6 +20,7 @@ class CheckIn {
         horizontalAlignment: "Left",
       },
     ];
+    this.teamSummaryOrder = ["great", "good", "ok", "not so great"];
   }
 
   getCard() {
@@ -36,12 +37,37 @@ class CheckIn {
     this.teamStatus[name] = feeling;
   }
 
+  _getTeamSummary() {
+    const feelingArray = this.teamSummaryOrder
+      .map((feeling) => {
+        if (Object.values(this.teamStatus).includes(feeling)) {
+          const feelingEntry = Object.keys(this.teamStatus).filter(
+            (name) => this.teamStatus[name] === feeling
+          );
+          return `${feelingEntry.join(" and ")} ${
+            feelingEntry.length > 1 ? "were" : "was"
+          } doing ${feeling}`;
+        }
+      })
+      .filter((entry) => !!entry);
+
+    if (feelingArray.length > 1) {
+      return (
+        feelingArray.slice(0, feelingArray.length - 1).join(", ") +
+        " and " +
+        feelingArray[feelingArray.length - 1]
+      );
+    }
+    return feelingArray[0];
+  }
+
   _resetStatus() {
     this.teamStatus = {};
   }
 
   _updateTeamSection(cardJSON) {
-    cardJSON.body[0].columns[0].items[2].text = `In your last session most of your team were doing ${this.teamStatus["Anthony Donovan"]}.`;
+    const teamSummary = this._getTeamSummary();
+    cardJSON.body[0].columns[0].items[2].text = `In your last session ${teamSummary}.`;
   }
 
   _addTeamSection(cardJSON) {

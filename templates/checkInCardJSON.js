@@ -15,7 +15,7 @@ const checkInCardJSON = {
             },
             {
               type: "TextBlock",
-              text: "How's it going?",
+              text: "How are you doing?",
               horizontalAlignment: "Left",
               wrap: true,
               color: "Dark",

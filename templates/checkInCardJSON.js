@@ -161,4 +161,4 @@ const checkInCardJSON = {
   version: "1.2",
 };
 
-module.exports = { checkInCardJSON };
+module.exports = checkInCardJSON;

@@ -4,16 +4,21 @@ var express = require("express");
 var bodyParser = require("body-parser");
 const fetch = require("node-fetch");
 var app = express();
-// imports
 const { Pomodoro } = require("./models/Pomodoro");
 const { CheckIn } = require("./models/CheckIn");
-const { checkInCardJSON } = require("./templates/checkInCardJSON");
+const checkInCardJSON = require("./templates/checkInCardJSON");
 app.use(bodyParser.json());
 app.use(express.static("images"));
 const config = require("./config.json");
 
 // init framework
 var framework = new framework(config);
+let interval;
+let responded = false;
+const TIME_INTERVAL = 1000;
+const pom = new Pomodoro();
+const check = new CheckIn(checkInCardJSON);
+
 framework.start();
 console.log("Starting framework, please wait...");
 
@@ -22,14 +27,8 @@ framework.on("initialized", function () {
 });
 
 framework.on("spawn", (bot, id, actorId) => {
-  if (!actorId) {
-    // console.log(
-    //   `While starting up, the framework found our bot in a space called: ${bot.room.title}`
-    // );
-  } else {
-    // When actorId is present it means someone added your bot got added to a new space
-    // Lets find out more about them..
-    var msg =
+  if (actorId) {
+    let msg =
       "You can say `help` to get the list of words I am able to respond to.";
     bot.webex.people
       .get(actorId)
@@ -43,7 +42,6 @@ framework.on("spawn", (bot, id, actorId) => {
         msg = `Hello there. ${msg}`;
       })
       .finally(() => {
-        // Say hello, and tell users what you do!
         if (bot.isDirect) {
           bot.say("markdown", msg);
         } else {
@@ -55,51 +53,20 @@ framework.on("spawn", (bot, id, actorId) => {
   }
 });
 
-//Process incoming messages
-
-let responded = false;
-
-framework.hears(/help|what can i (do|say)|what (can|do) you do/i, function (
-  bot,
-  trigger
-) {
-  console.log(`someone needs help! They asked ${trigger.text}`);
-  responded = true;
-  bot
-    .say(`Hello ${trigger.person.displayName}.`)
-    .then(() => sendHelp(bot))
-    .catch((e) => console.error(`Problem in help hander: ${e.message}`));
-});
-
-// Buttons & Cards data
-
-/* On mention with card example
-ex User enters @botname 'card me' phrase, the bot will produce a personalized card - https://developer.webex.com/docs/api/guides/cards
-*/
-framework.hears("card me", function (bot, trigger) {
-  console.log("someone asked for a card");
-  responded = true;
-  let avatar = trigger.person.avatar;
-
-  cardJSON.body[0].columns[0].items[0].url = avatar
-    ? avatar
-    : `${config.webhookUrl}/missing-avatar.jpg`;
-  cardJSON.body[0].columns[0].items[1].text = trigger.person.displayName;
-  cardJSON.body[0].columns[0].items[2].text = trigger.person.emails[0];
-  bot.sendCard(
-    cardJSON,
-    "This is customizable fallback text for clients that do not support buttons & cards"
+function sendHelp(bot) {
+  bot.say(
+    "markdown",
+    "These are the commands I can respond to:",
+    "\n\n " +
+      "1. **framework**   (learn more about the Webex Bot Framework) \n" +
+      "2. **info**  (get your personal details) \n" +
+      "3. **space**  (get details about this space) \n" +
+      "4. **card me** (a cool card!) \n" +
+      "5. **say hi to everyone** (everyone gets a greeting using a call to the Webex SDK) \n" +
+      "6. **reply** (have bot reply to your message) \n" +
+      "7. **help** (what you are reading now)"
   );
-});
-
-// =======
-// Test
-// =======
-
-var interval;
-const TIME_INTERVAL = 1000;
-const pom = new Pomodoro();
-const check = new CheckIn(checkInCardJSON);
+}
 
 function startSession(bot) {
   pom.isInSession = true;
@@ -129,6 +96,30 @@ function startSession(bot) {
     }
   }, TIME_INTERVAL);
 }
+
+async function getDisplayName(personId) {
+  const url = `https://webexapis.com/v1/people/${personId}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+  const responseJson = await response.json();
+  return responseJson.displayName;
+}
+
+// WHAT CAN I DO
+framework.hears(/help|what can i (do|say)|what (can|do) you do/i, function (
+  bot,
+  trigger
+) {
+  responded = true;
+  bot
+    .say(`Hello ${trigger.person.displayName}.`)
+    .then(() => sendHelp(bot))
+    .catch((e) => console.error(`Problem in help hander: ${e.message}`));
+});
 
 // WORK
 framework.hears("work", function (bot, trigger) {
@@ -259,88 +250,9 @@ framework.hears("finish", function (bot, trigger) {
   pom.reset();
 });
 
-// Temporary - remove later
-framework.hears("check in", function (bot, trigger) {
-  responded = true;
-  bot.sendCard(check.getCard());
-});
-
-framework.on("attachmentAction", function (bot, trigger) {
-  getDisplayName(trigger.attachmentAction.personId).then((displayName) => {
-    let response = {
-      name: displayName,
-      feeling: trigger.attachmentAction.inputs.feeling,
-    };
-    check.addRecord(response);
-  });
-});
-
-async function getDisplayName(personId) {
-  const url = `https://webexapis.com/v1/people/${personId}`;
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-    },
-  });
-  const responseJson = await response.json();
-  return responseJson.displayName;
-}
-
-app.post("/", webhook(framework));
-
-let cardJSON = {
-  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-  type: "AdaptiveCard",
-  version: "1.0",
-  body: [
-    {
-      type: "ColumnSet",
-      columns: [
-        {
-          type: "Column",
-          width: "5",
-          items: [
-            {
-              type: "Image",
-              url: "Your avatar appears here!",
-              size: "large",
-              horizontalAlignment: "Center",
-              style: "person",
-            },
-            {
-              type: "TextBlock",
-              text: "Your name will be here!",
-              size: "medium",
-              horizontalAlignment: "Center",
-              weight: "Bolder",
-            },
-            {
-              type: "TextBlock",
-              text: "And your email goes here!",
-              size: "small",
-              horizontalAlignment: "Center",
-              isSubtle: true,
-              wrap: false,
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
-// =======
-// Test
-// =======
-
-/* On mention with unexpected bot command
-   Its a good practice is to gracefully handle unexpected input
-*/
+// CATCH ALL
 framework.hears(/.*/, function (bot, trigger) {
-  // This will fire for any input so only respond if we haven't already
   if (!responded) {
-    console.log(`catch-all handler fired for user input: ${trigger.text}`);
     bot
       .say(`Sorry, I don't know how to respond to "${trigger.text}"`)
       .then(() => sendHelp(bot))
@@ -351,31 +263,36 @@ framework.hears(/.*/, function (bot, trigger) {
   responded = false;
 });
 
-function sendHelp(bot) {
-  bot.say(
-    "markdown",
-    "These are the commands I can respond to:",
-    "\n\n " +
-      "1. **framework**   (learn more about the Webex Bot Framework) \n" +
-      "2. **info**  (get your personal details) \n" +
-      "3. **space**  (get details about this space) \n" +
-      "4. **card me** (a cool card!) \n" +
-      "5. **say hi to everyone** (everyone gets a greeting using a call to the Webex SDK) \n" +
-      "6. **reply** (have bot reply to your message) \n" +
-      "7. **help** (what you are reading now)"
-  );
-}
+// Temporary - remove later
+framework.hears("check in", function (bot, trigger) {
+  responded = true;
+  bot.sendCard(check.getCard());
+});
 
-// health check
+// PROCESS A CARD BUTTON CLICK
+framework.on("attachmentAction", function (bot, trigger) {
+  getDisplayName(trigger.attachmentAction.personId).then((displayName) => {
+    let response = {
+      name: displayName,
+      feeling: trigger.attachmentAction.inputs.feeling,
+    };
+    check.addRecord(response);
+  });
+});
+
+// POST REQUESTS
+app.post("/", webhook(framework));
+
+// HEALTH CHECK
 app.get("/", function (req, res, bot) {
-  res.send(`I'm alive.`);
+  res.send(`I'm alive`);
 });
 
 var server = app.listen(config.port, function () {
   framework.debug("framework listening on port %s", config.port);
 });
 
-// graceful shutdown
+// GRACEFUL SHUTDOWN
 process.on("SIGINT", function () {
   framework.debug("stoppping...");
   server.close();

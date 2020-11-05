@@ -44,21 +44,25 @@ class CheckIn {
           const feelingEntry = Object.keys(this.teamStatus).filter(
             (name) => this.teamStatus[name] === feeling
           );
-          return `${feelingEntry.join(" and ")} ${
+          return `${this._combineEntires(feelingEntry)} ${
             feelingEntry.length > 1 ? "were" : "was"
           } doing ${feeling}`;
         }
       })
       .filter((entry) => !!entry);
 
-    if (feelingArray.length > 1) {
+    return this._combineEntires(feelingArray);
+  }
+
+  _combineEntires(entries) {
+    if (entries.length > 1) {
       return (
-        feelingArray.slice(0, feelingArray.length - 1).join(", ") +
+        entries.slice(0, entries.length - 1).join(", ") +
         " and " +
-        feelingArray[feelingArray.length - 1]
+        entries[entries.length - 1]
       );
     }
-    return feelingArray[0];
+    return entries[0];
   }
 
   _resetStatus() {

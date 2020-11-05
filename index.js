@@ -11,11 +11,10 @@ app.use(bodyParser.json());
 app.use(express.static("images"));
 const config = require("./config.json");
 
-// init framework
-var framework = new framework(config);
 let interval;
 let responded = false;
 const TIME_INTERVAL = 1000;
+var framework = new framework(config);
 const pom = new Pomodoro();
 const check = new CheckIn(checkInCardJSON);
 
@@ -23,7 +22,7 @@ framework.start();
 console.log("Starting framework, please wait...");
 
 framework.on("initialized", function () {
-  console.log("framework is all fired up! [Press CTRL-C to quit]");
+  console.log("Framework up [Press CTRL-C to quit]");
 });
 
 framework.on("spawn", (bot, id, actorId) => {
@@ -71,27 +70,26 @@ function sendHelp(bot) {
 function startSession(bot) {
   pom.isInSession = true;
   interval = setInterval(() => {
-    console.log(
-      pom.state.status,
-      Math.floor(pom.state.secondsRemaining / 60000)
-    );
+    console.log(pom.status, pom.secondsRemaining);
 
-    if (!pom.state.isPaused) {
+    if (!pom.isPaused) {
       pom.updateTime(TIME_INTERVAL);
     }
 
-    if (pom.state.secondsRemaining === 0) {
+    if (pom.secondsRemaining === 0) {
       let updateMessage;
-      if (pom.state.status === "work") {
+      if (pom.status === "work") {
         updateMessage = pom.getSessionUpdate("breakSession");
-      } else if (
-        pom.state.status === "shortBreak" ||
-        pom.state.status === "longBreak"
-      ) {
+      } else if (pom.status === "shortBreak" || pom.status === "longBreak") {
         updateMessage = pom.getSessionUpdate("workSession");
       }
+
       bot
         .say("markdown", updateMessage)
+        .then(() => {
+          if (pom.status === "shortBreak" || pom.status === "longBreak")
+            bot.sendCard(check.getCard());
+        })
         .catch((e) => console.error(`bot.say failed: ${e.message}`));
     }
   }, TIME_INTERVAL);
@@ -128,8 +126,8 @@ framework.hears("work", function (bot, trigger) {
   if (!pom.isInSession) startSession(bot);
 
   let reminderMessage;
-  if (pom.state.isPaused) reminderMessage = pom.getReminder("pauseReminder");
-  else if (pom.state.status === "work")
+  if (pom.isPaused) reminderMessage = pom.getReminder("pauseReminder");
+  else if (pom.status === "work")
     reminderMessage = pom.getReminder("workReminder");
   if (reminderMessage)
     return bot
@@ -149,12 +147,8 @@ framework.hears("break", function (bot, trigger) {
   let reminderMessage;
   if (!pom.isInSession)
     reminderMessage = pom.getReminder("notInSessionReminder");
-  else if (pom.state.isPaused)
-    reminderMessage = pom.getReminder("pauseReminder");
-  else if (
-    pom.state.status === "shortBreak" ||
-    pom.state.status === "longBreak"
-  )
+  else if (pom.isPaused) reminderMessage = pom.getReminder("pauseReminder");
+  else if (pom.status === "shortBreak" || pom.status === "longBreak")
     reminderMessage = pom.getReminder("breakReminder");
   if (reminderMessage)
     return bot
@@ -164,6 +158,7 @@ framework.hears("break", function (bot, trigger) {
   let updateMessage = pom.getSessionUpdate("breakSession", trigger);
   bot
     .say("markdown", updateMessage)
+    .then(() => bot.sendCard(check.getCard()))
     .catch((e) => console.error(`bot.say failed: ${e.message}`));
 });
 
@@ -191,14 +186,13 @@ framework.hears("pause", function (bot, trigger) {
   let reminderMessage;
   if (!pom.isInSession)
     reminderMessage = pom.getReminder("notInSessionReminder");
-  else if (pom.state.isPaused)
-    reminderMessage = pom.getReminder("pauseReminder");
+  else if (pom.isPaused) reminderMessage = pom.getReminder("pauseReminder");
   if (reminderMessage)
     return bot
       .reply(trigger.message, reminderMessage, "markdown")
       .catch((e) => console.error(`bot.say failed: ${e.message}`));
 
-  pom.state.isPaused = true;
+  pom.isPaused = true;
   bot.say(`${trigger.person.displayName} paused the session ⏸️`);
 });
 
@@ -209,14 +203,13 @@ framework.hears("resume", function (bot, trigger) {
   let reminderMessage;
   if (!pom.isInSession)
     reminderMessage = pom.getReminder("notInSessionReminder");
-  else if (!pom.state.isPaused)
-    reminderMessage = pom.getReminder("resumeReminder");
+  else if (!pom.isPaused) reminderMessage = pom.getReminder("resumeReminder");
   if (reminderMessage)
     return bot
       .reply(trigger.message, reminderMessage, "markdown")
       .catch((e) => console.error(`bot.say failed: ${e.message}`));
 
-  pom.state.isPaused = false;
+  pom.isPaused = false;
   bot
     .say(`${trigger.person.displayName} resumed the session ▶️`)
     .then(() => {
@@ -246,8 +239,8 @@ framework.hears("finish", function (bot, trigger) {
       let finishMessage = pom.getFinishMessage();
       bot.say(finishMessage);
     })
-    .catch((e) => console.error(`bot.say failed: ${e.message}`));
-  pom.reset();
+    .catch((e) => console.error(`bot.say failed: ${e.message}`))
+    .finally(() => pom.reset());
 });
 
 // CATCH ALL
@@ -288,6 +281,7 @@ app.get("/", function (req, res, bot) {
   res.send(`I'm alive`);
 });
 
+// CONFIGURE SERVER PORT
 var server = app.listen(config.port, function () {
   framework.debug("framework listening on port %s", config.port);
 });

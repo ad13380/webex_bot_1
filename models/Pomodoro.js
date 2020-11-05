@@ -23,16 +23,14 @@ class Pomodoro {
     this.SHORT_BREAK_MSG = "a short 5 minute break ☕️";
     this.LONG_BREAK_MSG = "a longer 20 minute break 🏖️";
     this.WORK_MSG = "a 25 miniute working session 📚";
-    // fix these to be in seconds
-    this.WORKING_TIME_LIMIT = 3 * 60000;
-    this.SHORT_BREAK_TIME_LIMIT = 1 * 60000;
-    this.LONG_BREAK_TIME_LIMIT = 2 * 60000;
+    this.WORKING_TIME_LIMIT = 3 * 60;
+    this.SHORT_BREAK_TIME_LIMIT = 1 * 60;
+    this.LONG_BREAK_TIME_LIMIT = 2 * 60;
     this.BREAK_COUNTER_LIMIT = 3;
   }
 
   updateTime(msInterval) {
-    // fix interval to be in sec
-    this.state.secondsRemaining -= msInterval;
+    this.state.secondsRemaining -= msInterval / 1000;
     if (this.state.status === "work")
       this.state.secondsWorked += msInterval / 1000;
   }
@@ -90,8 +88,28 @@ class Pomodoro {
     return this.state.isInSession;
   }
 
+  get isPaused() {
+    return this.state.isPaused;
+  }
+
+  get secondsRemaining() {
+    return this.state.secondsRemaining;
+  }
+
+  get status() {
+    return this.state.status;
+  }
+
   set isInSession(bool) {
     this.state.isInSession = bool;
+  }
+
+  set isPaused(bool) {
+    this.state.isPaused = bool;
+  }
+
+  set status(newStatus) {
+    this.state.status = newStatus;
   }
 
   _isLongBreak() {
@@ -109,10 +127,9 @@ class Pomodoro {
   }
 
   _formatTime(seconds) {
-    // this is in milliseconds, fix this
     let timeFormatArray = [];
-    const hours = Math.floor(seconds / 3600000);
-    const minutes = Math.floor((seconds - hours * 3600000) / 60000);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds - hours * 3600) / 60);
 
     if (hours > 0) {
       timeFormatArray.push(hours > 1 ? `${hours} hours` : "1 hour");

@@ -29,12 +29,16 @@ class CheckIn {
       this._addTeamSection(cardJSON);
       this._updateTeamSection(cardJSON);
     }
-    this._resetStatus();
+    this.reset();
     return cardJSON;
   }
 
   addRecord({ name, feeling }) {
     this.teamStatus[name] = feeling;
+  }
+
+  reset() {
+    this.teamStatus = {};
   }
 
   _getTeamSummary() {
@@ -63,10 +67,6 @@ class CheckIn {
       );
     }
     return entries[0];
-  }
-
-  _resetStatus() {
-    this.teamStatus = {};
   }
 
   _updateTeamSection(cardJSON) {

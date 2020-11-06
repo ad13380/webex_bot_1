@@ -240,7 +240,10 @@ framework.hears("finish", function (bot, trigger) {
       bot.say(finishMessage);
     })
     .catch((e) => console.error(`bot.say failed: ${e.message}`))
-    .finally(() => pom.reset());
+    .finally(() => {
+      pom.reset();
+      check.reset();
+    });
 });
 
 // CATCH ALL
